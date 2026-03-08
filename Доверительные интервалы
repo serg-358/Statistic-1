@@ -1,0 +1,47 @@
+import numpy as np
+import scipy.stats as stats
+
+n = 34
+x_mean = 4.385
+s = 7.154
+alpha = 0.05
+
+# Доверительный интервал для матожидания
+# Число степеней свободы
+df = n - 1
+print(f"Число степеней свободы: r = {df}")
+
+# Критическое значение t-распределения Стьюдента
+t_crit = stats.t.ppf(1 - alpha/2, df)
+print(f"Критическое распределение Стьюдента t: {t_crit:.3f}")
+
+# Погрешность оценки
+delta = (s * t_crit) / np.sqrt(df)
+print(f"Погрешность оценки: {delta:.3f} млн. чел.")
+
+# Границы доверительного интервала
+ci_lower1 = x_mean - delta
+ci_upper1 = x_mean + delta
+
+print(f"Доверительный интервал для матожидания:")
+print(f"({ci_lower1:.3f}; {ci_upper1:.3f}) млн. чел.")
+
+# Квантили хи-квадрат распределения
+chi2_lower = stats.chi2.ppf(alpha/2, df)      
+chi2_upper = stats.chi2.ppf(1 - alpha/2, df)  
+
+print(f"хи-квадрат 1: ({df}) = {chi2_lower:.3f}")
+print(f"хи-квадрат 2: ({df}) = {chi2_upper:.3f}")
+
+s_sqrt_n = s * np.sqrt(n)
+print(f"Числитель: {s_sqrt_n:.3f}")
+
+# Границы доверительного интервала
+ci_lower2 = s_sqrt_n / np.sqrt(chi2_upper)
+ci_upper2 = s_sqrt_n / np.sqrt(chi2_lower)
+
+print(f"Нижняя граница: {ci_lower2:.3f}")
+print(f"Верхняя граница: {ci_upper2:.3f}")
+print(f"Доверительный интервал для СКО:")
+print(f"({ci_lower2:.3f}; {ci_upper2:.3f}) млн. чел.")
+
