@@ -1,0 +1,50 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from google.colab import files
+
+uploaded = files.upload()
+filename = list(uploaded.keys())[0]
+
+df = pd.read_excel(filename)
+
+countries = df.iloc[:, 0].values  # Первый столбец - страны
+values = df.iloc[:, 1].values     # Второй столбец - значения
+
+# Удаление пропущенных значений
+mask = ~np.isnan(values)
+countries = countries[mask]
+values = values[mask]
+
+sorted_idx = np.argsort(values)[::-1]
+countries = countries[sorted_idx]
+values = values[sorted_idx]
+
+fig, ax = plt.subplots(figsize=(16, 8))
+
+ax.bar(range(len(countries)), values, color='yellow',  edgecolor='black', linewidth=0.8, width=0.7)
+
+ax.set_ylabel('Количество туристов, млн. чел.', fontsize=12, fontweight='bold', labelpad=10)
+ax.set_xlabel('Страны', fontsize=12, fontweight='bold', labelpad=10)
+ax.set_title('Распределение количества туристов по странам Азии и Тихого океана за 2023 год', 
+          fontsize=14, fontweight='bold', pad=20)
+
+ax.set_xticks(range(len(countries)))
+ax.set_xticklabels(countries, rotation=90, fontsize=9, ha='center')
+
+# Добавление значений на верхушках столбцов
+for i, v in enumerate(values):
+    ax.text(i, v + 0.3, f'{v}', 
+             ha='center', va='bottom', fontsize=8, fontweight='bold')
+
+# Добавление сетки для лучшей читаемости
+ax.grid(axis='y', alpha=0.3, linestyle='--', linewidth=0.5)
+ax.set_axisbelow(True)
+
+# Верхнее значение по оси Y
+ax.set_ylim(0, max(values) * 1.15)
+
+# Автоматическое размещение элементов
+plt.tight_layout()
+plt.show()
+
