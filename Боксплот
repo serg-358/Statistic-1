@@ -1,0 +1,85 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from google.colab import files
+from matplotlib.patches import Patch
+from matplotlib.lines import Line2D
+
+uploaded = files.upload()
+filename = list(uploaded.keys())[0]
+
+df = pd.read_excel(filename)
+
+# Извлечение данных
+data = df.iloc[:, 1].values
+data = data[~np.isnan(data)]
+
+n = len(data)
+
+# Квартили
+Q1 = np.percentile(data, 25)
+Q3 = np.percentile(data, 75)
+median = np.median(data)
+IQR = Q3 - Q1
+
+# Границы для выбросов
+upper_bound = Q3 + 1.5 * IQR
+
+# Поиск выбросов
+outliers = data[data > upper_bound] # Маска для поиска больших выбросов
+
+print(f"Первый квартиль: Q1 = {Q1:.2f} млн. чел.")
+print(f"Третий квартиль: Q3 = {Q3:.2f} млн. чел.")
+print(f"Медиана (второй квартиль): med = {median:.2f} млн. чел.")
+print(f"Межквартильный размах: IQR = {IQR:.2f} млн. чел.")
+print(f"Выбросы: {len(outliers)}")
+
+# Построение Boxplot с скрипичной диаграммой
+# Создание фигуры
+fig, ax = plt.subplots(figsize=(12, 6))
+
+# Скрипичная диаграмма
+parts = ax.violinplot(data, positions=[1], widths=0.7, 
+                       showmeans=False, showmedians=False, showextrema=False,
+                       vert=False)
+
+# Настройка цвета скрипичной диаграммы
+for pc in parts['bodies']:
+    pc.set_facecolor('skyblue')
+    pc.set_edgecolor('black')
+    pc.set_linewidth(1.5)
+    pc.set_alpha(0.7)
+
+# Boxplot
+bp = ax.boxplot(data, positions=[1], widths=0.3, 
+                patch_artist=True,
+                boxprops=dict(facecolor='orange', edgecolor='orange', alpha=0.6, linewidth=2),
+                medianprops=dict(color='red', linewidth=2.5),
+                whiskerprops=dict(color='orange', linewidth=1.5),
+                capprops=dict(color='orange', linewidth=1.5),
+                vert=False)
+
+# Добавление меток
+ax.set_xlabel('Количество международных туристов (млн. чел.)', fontsize=11, fontweight='bold')
+ax.set_title('Распределение туристических прибытий по странам Азии и Тихого океана (2023)', 
+             fontsize=12, fontweight='bold', pad=15)
+
+# Настройка оси Y
+ax.set_ylim(0.3, 1.7)
+ax.set_yticks([1])
+ax.set_yticklabels(['Туристические прибытия'], fontsize=10)
+
+# Добавление легенды
+legend_elements = [
+    Patch(facecolor='skyblue', edgecolor='black', alpha=0.7, label='Плотность распределения'),
+    Patch(facecolor='orange', edgecolor='orange', alpha=0.6, label='Межквартильный размах (IQR)'),
+    Line2D([0], [0], color='red', linewidth=2.5, label='Медиана'),
+    Line2D([0], [0], marker='o', color='w', markerfacecolor='green', 
+           markersize=8, label=f'Выбросы ({len(outliers)} шт.)')
+]
+
+ax.legend(handles=legend_elements, loc='lower right', fontsize=9, framealpha=0.9)
+
+# Сетка
+ax.grid(axis='x', alpha=0.3, linestyle='--')
+ax.set_axisbelow(True)
