@@ -1,0 +1,53 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import expon, kstest
+import seaborn as sns
+from google.colab import files
+import pandas as pd
+from scipy import stats
+import pylab
+
+# Загрузка данных
+uploaded = files.upload()
+filename = list(uploaded.keys())[0]
+
+df = pd.read_excel(filename)
+x = df.iloc[:, 1].values
+x = x[~np.isnan(x)]
+
+# Оценка параметра лямбда для экспоненциального распределения
+lambda_hat = 1 / np.mean(x)
+
+# Построение KDE
+sns.kdeplot(x, fill=True, label='KDE (эмпирическая плотность)', linewidth=2)
+
+# Теоретическая экспоненциальная плотность
+x_grid = np.linspace(0, max(x), 1000)
+exp_pdf = expon.pdf(x_grid, scale=1/lambda_hat)
+plt.plot(x_grid, exp_pdf, 'r--', label=f'Экспоненциальное (λ={lambda_hat:.3f})', linewidth=2)
+
+plt.xlabel('Количество туристов, млн чел.')
+plt.ylabel('Плотность вероятности')
+plt.title('Сравнение KDE и экспоненциального распределения')
+plt.legend()
+plt.grid(alpha=0.3)
+plt.show()
+
+# Нормировка данных для KS-теста
+ks_stat, p_value = kstest(x, 'expon', args=(0, 1/lambda_hat))
+print(f"KS-статистика: {ks_stat:.4f}, p-value: {p_value:.4f}")
+n = len(x)
+alpha = 0.05
+c_alpha = 1.36  # для α = 0.05
+D_crit = c_alpha / np.sqrt(n)
+print(f"D критическое (α={alpha}): {D_crit:.4f}")
+if p_value < 0.05:
+    print("Гипотеза об экспоненциальности отвергается (α=0.05)")
+else:
+    print("Гипотеза об экспоненциальности не отвергается")
+
+# Q-Q plot для экспоненциального распределения
+stats.probplot(x, dist=expon(scale=1/lambda_hat), plot=pylab)
+plt.title('Q-Q plot: данные и экспоненциальное распределение')
+plt.grid(alpha=0.3)
+plt.show()
