@@ -1,0 +1,191 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy.stats import (wilcoxon, spearmanr, mannwhitneyu, kruskal, median_test, kendalltau, shapiro)
+import warnings
+from google.colab import files
+import pandas as pd
+import os
+
+#Загрузка файлов
+uploaded1 = files.upload()
+uploaded2 = files.upload()
+warnings.filterwarnings('ignore')
+
+# Настройка стиля
+plt.style.use('seaborn-v0_8-whitegrid')
+plt.rcParams['figure.figsize'] = (10, 6)
+plt.rcParams['font.size'] = 10
+
+# Загрузка
+receipts = pd.read_excel('12.xlsx', sheet_name='Лист1')
+expenditure = pd.read_excel('14.xlsx', sheet_name='Лист1')
+
+# Очистка названий
+receipts.columns = receipts.columns.str.strip()
+expenditure.columns = expenditure.columns.str.strip()
+
+# Переименование столбцов
+receipts = receipts.rename(columns={receipts.columns[0]: 'Country', receipts.columns[1]: 'Receipts_bln'})
+expenditure = expenditure.rename(columns={expenditure.columns[0]: 'Country', expenditure.columns[1]: 'Expenditure_bln'})
+
+# Объединение по общим странам
+df = pd.merge(receipts, expenditure, on='Country', how='inner')
+df = df[['Country', 'Receipts_bln', 'Expenditure_bln']].copy()
+
+# Субрегионы
+subregions = {
+    'Юго-Восточная Азия': ['Thailand', 'Malaysia', 'Indonesia', 'Singapore',
+                           'Cambodia', 'Philippines', 'Laos', 'Vietnam',
+                           'Brunei', 'Timor-Leste', 'Myanmar'],
+    'Южная Азия': ['India', 'Pakistan', 'Sri Lanka', 'Nepal',
+                   'Maldives', 'Bangladesh', 'Bhutan'],
+    'Океания': ['New Zealand', 'Fiji', 'Samoa', 'Papua New Guinea',
+                'Tonga', 'Palau', 'Solomon Islands', 'Kiribati', 'Tuvalu'],
+    'Восточная Азия': ['Hong Kong (China)', 'Macao (China)', 'China',
+                       'Japan', 'Korea (ROK)', 'Taiwan (pr. of China)']
+}
+
+def get_subregion(country):
+    for region, countries in subregions.items():
+        if country in countries:
+            return region
+    return 'Другие'
+
+df['Subregion'] = df['Country'].apply(get_subregion)
+
+print(f"Объединённая выборка: {len(df)} стран")
+print(df.head(10))
+
+#Диаграмма рассеяния
+plt.figure(figsize=(9, 6))
+plt.scatter(df['Receipts_bln'], df['Expenditure_bln'], s=60, alpha=0.7, edgecolors='black', color='skyblue')
+
+# Линия тренда
+z = np.polyfit(df['Receipts_bln'], df['Expenditure_bln'], 1)
+p = np.poly1d(z)
+x_line = np.linspace(df['Receipts_bln'].min(), df['Receipts_bln'].max(), 100)
+plt.plot(x_line, p(x_line), "b--", alpha=0.6, label='Тренд')
+
+# 5 стран-лидеров
+top_countries = df.nlargest(5, 'Receipts_bln')
+for _, row in top_countries.iterrows():
+    plt.annotate(row['Country'],
+                 (row['Receipts_bln'], row['Expenditure_bln']),
+                 textcoords="offset points", xytext=(5,5), ha='left', fontsize=8)
+plt.xlabel('Доходы от туризма, млрд $')
+plt.ylabel('Расходы жителей за рубежом, млрд $')
+plt.title('Связь доходов и расходов от туризма')
+plt.legend()
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+#Боксплот Вилкоксона
+# Вывод медиан в консоль
+print(f"Медиана доходов (въездной туризм): {df['Receipts_bln'].median():.2f} млрд $")
+print(f"Медиана расходов (выездной туризм): {df['Expenditure_bln'].median():.2f} млрд $")
+print(f"Разница медиан: {df['Receipts_bln'].median() - df['Expenditure_bln'].median():.2f} млрд $")
+
+plt.figure(figsize=(10, 6))
+data_to_plot = [df['Receipts_bln'].values, df['Expenditure_bln'].values]
+bp = plt.boxplot(data_to_plot, vert=False, patch_artist=True, widths=0.5)
+
+colors = ['#2E86AB', '#A23B72']
+for patch, color in zip(bp['boxes'], colors):
+    patch.set_facecolor(color)
+
+plt.yticks([1, 2], ['Доходы (въездной)', 'Расходы (выездной)'])
+plt.xlabel('Млрд $')
+plt.title('Сравнение доходов и расходов от туризма (парные данные)')
+plt.grid(axis='x', alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+#Боксплот Манна-Уитни
+median_receipts = df['Receipts_bln'].median()
+df['Receipt_group'] = df['Receipts_bln'].apply(
+    lambda x: 'Высокие доходы' if x >= median_receipts else 'Низкие доходы'
+)
+
+# Вывод медиан в консоль
+for group in ['Низкие доходы', 'Высокие доходы']:
+    med = df[df['Receipt_group'] == group]['Expenditure_bln'].median()
+    n = len(df[df['Receipt_group'] == group])
+    print(f"Группа '{group}': медиана расходов = {med:.2f} млрд $ (n={n} стран)")
+
+plt.figure(figsize=(10, 6))
+sns.boxplot(y='Receipt_group', x='Expenditure_bln', data=df,
+            palette=['#6A994E', '#C73E1D'], width=0.5)
+plt.xlabel('Расходы жителей за рубежом, млрд $')
+plt.ylabel('Группа по доходам от туризма')
+plt.title('Расходы в странах с разным уровнем доходов от туризма')
+plt.grid(axis='x', alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+#Боксплот Краскела-Уоллиса
+region_counts = df['Subregion'].value_counts()
+valid_regions = region_counts[region_counts >= 3].index.tolist()
+df_filtered = df[df['Subregion'].isin(valid_regions)].copy()
+
+# Вывод медиан в консоль
+for region in valid_regions:
+    med = df_filtered[df_filtered['Subregion'] == region]['Expenditure_bln'].median()
+    n = len(df_filtered[df_filtered['Subregion'] == region])
+    print(f"Субрегион '{region}': медиана расходов = {med:.2f} млрд $ (n={n} стран)")
+
+plt.figure(figsize=(12, 7))
+sns.boxplot(y='Subregion', x='Expenditure_bln', data=df_filtered,
+            palette=['#F18F01', '#C73E1D', '#6A994E'], width=0.5)
+plt.xlabel('Расходы жителей за рубежом, млрд $')
+plt.ylabel('Субрегион')
+plt.title('Расходы на международный туризм по субрегионам')
+plt.grid(axis='x', alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+#Статистика
+alpha = 0.05
+
+#Вилкоксон
+print("Критерий Вилкоксона (парное сравнение: доходы - расходы)")
+wilcoxon_stat, wilcoxon_p = wilcoxon(df['Receipts_bln'], df['Expenditure_bln'], alternative='two-sided')
+print(f"Результаты:")
+print(f"Статистика W = {wilcoxon_stat:.4f}")
+print(f"p-value = {wilcoxon_p:.6f}")
+print(f"Медиана доходов: {df['Receipts_bln'].median():.2f} млрд $")
+print(f"Медиана расходов: {df['Expenditure_bln'].median():.2f} млрд $")
+print()
+#Корреляция Спирмена
+print("Корреляция Спирмена")
+print()
+spearman_rho, spearman_p = spearmanr(df['Receipts_bln'], df['Expenditure_bln'])
+print(f"Результаты:")
+print(f"Коэффициент ρ = {spearman_rho:.4f}")
+print(f"p-value = {spearman_p:.6f}")
+print()
+#Критерий Манна-Уитни
+print("Критерий Манна-Уитни")
+print()
+high_receipts = df[df['Receipt_group'] == 'Высокие доходы']['Expenditure_bln']
+low_receipts = df[df['Receipt_group'] == 'Низкие доходы']['Expenditure_bln']
+mw_stat, mw_p = mannwhitneyu(high_receipts, low_receipts, alternative='two-sided')
+print(f"Результаты:")
+print(f"Статистика U = {mw_stat:.4f}")
+print(f"p-value = {mw_p:.6f}")
+print(f"Медиана расходов (высокие доходы): {high_receipts.median():.2f} млрд $")
+print(f"Медиана расходов (низкие доходы): {low_receipts.median():.2f} млрд $")
+print()
+#Критерий Краскела-Уоллиса
+print("Критерий Краскела-Уоллиса")
+print()
+region_samples = [group['Expenditure_bln'].values for name, group in df_filtered.groupby('Subregion')]
+region_names = [name for name, group in df_filtered.groupby('Subregion')]
+kw_stat, kw_p = kruskal(*region_samples)
+print(f"Результаты:")
+print(f"Статистика H = {kw_stat:.4f}")
+print(f"p-value = {kw_p:.6f}")
+print(f"Субрегионы: {', '.join(region_names)}")
+
+
