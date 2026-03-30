@@ -1,0 +1,192 @@
+from google.colab import files
+import pandas as pd
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy.stats import shapiro, spearmanr, mannwhitneyu, kruskal, median_test, kendalltau, norm
+import warnings
+
+# Загрузка файлов
+uploaded1 = files.upload()
+uploaded2 = files.upload()
+warnings.filterwarnings('ignore')
+
+# Настройка стиля
+plt.style.use('seaborn-v0_8-whitegrid')
+plt.rcParams['figure.figsize'] = (10, 6)
+arrivals = pd.read_excel('1.xlsx', sheet_name='Лист1')
+receipts = pd.read_excel('12.xlsx', sheet_name='Лист1')
+arrivals['Country'] = arrivals['Country'].str.strip()
+receipts['Country'] = receipts['Country'].str.strip()
+
+# Объединение по общим странам
+df = pd.merge(arrivals, receipts, on='Country', how='inner')
+df = df.rename(columns={
+    'Int. Tourist Arrivals (million)': 'Tourists_mln',
+    'Int. Tourism Receipts (USD billion)': 'Receipts_bln'
+})
+df = df[['Country', 'Tourists_mln', 'Receipts_bln']].copy()
+
+# Субрегионы
+subregions = {
+    'Юго-Восточная Азия': ['Thailand', 'Malaysia', 'Indonesia', 'Singapore',
+                           'Cambodia', 'Philippines', 'Laos', 'Vietnam',
+                           'Brunei', 'Timor-Leste', 'Myanmar'],
+    'Южная Азия': ['India', 'Pakistan', 'Sri Lanka', 'Nepal',
+                   'Maldives', 'Bangladesh', 'Bhutan'],
+    'Океания': ['New Zealand', 'Fiji', 'Samoa', 'Papua New Guinea',
+                'Tonga', 'Palau', 'Solomon Islands', 'Kiribati', 'Tuvalu'],
+    'Восточная Азия': ['Hong Kong (China)', 'Macao (China)', 'China',
+                       'Japan', 'Korea (ROK)', 'Taiwan (pr. of China)']
+}
+
+def get_subregion(country):
+    for region, countries in subregions.items():
+        if country in countries:
+            return region
+    return 'Другие'
+
+df['Subregion'] = df['Country'].apply(get_subregion)
+
+print(f"Объединённая выборка: {len(df)} стран")
+print(df.head(10))
+
+# Гистограмма доходов
+plt.figure(figsize=(9, 6))
+plt.hist(df['Receipts_bln'], bins=12, edgecolor='black', alpha=0.7, color='lightcoral')
+
+# Текущие оси
+ax = plt.gca()
+
+# Диапазон x для кривой нормального распределения
+x = np.linspace(0, df['Tourists_mln'].max(), 100)
+
+# Нормальное распределение с параметрами данных
+y = norm.pdf(x, df['Tourists_mln'].mean(), df['Tourists_mln'].std()) * len(df) * (df['Tourists_mln'].max()/12)
+
+# Добавление кривой
+plt.plot(x, y, 'r-', linewidth=2, label='Нормальное распределение')
+plt.axvline(df['Receipts_bln'].mean(), color='green', linestyle='-', label=f'Среднее: {df["Receipts_bln"].mean():.2f} млрд $')
+plt.axvline(df['Receipts_bln'].median(), color='red', linestyle='--', label=f'Медиана: {df["Receipts_bln"].median():.2f} млрд $')
+plt.xlabel('Доходы от туризма, млрд $')
+plt.ylabel('Число стран')
+plt.title('Распределение доходов от туризма по странам (2023)')
+plt.legend()
+plt.grid(axis='y', alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+# Диаграмма рассеяния
+plt.figure(figsize=(9, 6))
+plt.scatter(df['Tourists_mln'], df['Receipts_bln'], s=60, alpha=0.7, edgecolors='black', color='skyblue')
+z = np.polyfit(df['Tourists_mln'], df['Receipts_bln'], 1)
+p = np.poly1d(z)
+x_line = np.linspace(df['Tourists_mln'].min(), df['Tourists_mln'].max(), 100)
+plt.plot(x_line, p(x_line), "b--", alpha=0.6, label='Тренд')
+plt.xlabel('Туристы, млн чел.')
+plt.ylabel('Доходы, млрд $')
+plt.title('Связь турпотока и доходов')
+plt.legend()
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+# Боксплот для Манна-Уитни
+median_t = df['Tourists_mln'].median()
+df['Tourist_group'] = df['Tourists_mln'].apply(lambda x: 'Высокий турпоток' if x >= median_t else 'Низкий турпоток')
+
+plt.figure(figsize=(10, 6))
+sns.boxplot(y='Tourist_group', x='Receipts_bln', data=df, palette=['#6A994E', '#2E86AB'], orient='h')
+plt.ylabel('Группа по турпотоку')
+plt.xlabel('Доходы от туризма, млрд $')
+plt.title('Доходы в странах с разным турпотоком')
+plt.tight_layout()
+plt.show()
+# Вычисление медианы турпотока для разделения на группы
+median_tourists = df['Tourists_mln'].median()
+
+# Формирование групп
+high_tourists = df[df['Tourists_mln'] >= median_tourists]['Receipts_bln']
+low_tourists = df[df['Tourists_mln'] < median_tourists]['Receipts_bln']
+
+# Вывод медиан доходов по группам
+print("Критерий Манна-Уитни")
+print(f"Медиана турпотока: {median_tourists:.2f} млн чел.")
+print(f"Группа 1 — Высокий турпоток (n={len(high_tourists)} стран):")
+print(f"Медиана доходов: {high_tourists.median():.2f} млрд $")
+print(f"Мин: {high_tourists.min():.2f} млрд $")
+print(f"Макс: {high_tourists.max():.2f} млрд $")
+print(f"Группа 2 — Низкий турпоток (n={len(low_tourists)} стран):")
+print(f"Медиана доходов: {low_tourists.median():.2f} млрд $")
+print(f"Мин: {low_tourists.min():.2f} млрд $")
+print(f"Макс: {low_tourists.max():.2f} млрд $")
+print(f"Разница медиан: {high_tourists.median() - low_tourists.median():.2f} млрд $")
+
+# Фильтрация регионов
+region_counts = df['Subregion'].value_counts()
+valid_regions = region_counts[region_counts >= 3].index.tolist()
+df_filtered = df[df['Subregion'].isin(valid_regions)].copy()
+
+# Вычисление и вывод медиан по регионам в консоль
+print("Критерий Краскела-Уоллиса")
+print(f"{'Субрегион':<25} | {'n':>3} | {'Медиана доходов':>15}")
+for region in valid_regions:
+    n = len(df_filtered[df_filtered['Subregion'] == region])
+    med = df_filtered[df_filtered['Subregion'] == region]['Receipts_bln'].median()
+    print(f"{region:<25} | {n:>3} | {med:>15.2f} млрд $")
+
+# Боксплот для Краскела-Уоллиса
+plt.figure(figsize=(10, 8))
+sns.boxplot(y='Subregion', x='Receipts_bln', data=df_filtered, palette=['#F18F01', '#C73E1D', '#6A994E'], orient='h')
+plt.ylabel('Субрегион')
+plt.xlabel('Доходы от туризма, млрд $')
+plt.title('Доходы от туризма по субрегионам')
+plt.tight_layout()
+plt.show()
+
+# Статистика
+alpha = 0.05
+
+# Шапиро-Уилка
+print("Критерий Шапиро-Уилка")
+sw_stat, sw_p = shapiro(df['Receipts_bln'])
+print(f"W = {sw_stat:.4f}, p = {sw_p:.6f}")
+print()
+
+# Спирмен
+print("Корреляция Спирмена")
+sp_rho, sp_p = spearmanr(df['Tourists_mln'], df['Receipts_bln'])
+print(f"po = {sp_rho:.4f}, p = {sp_p:.6f}")
+print()
+
+# Манна-Уитни
+print("Критерий Манна-Уитни")
+high_t = df[df['Tourist_group'] == 'Высокий турпоток']['Receipts_bln']
+low_t = df[df['Tourist_group'] == 'Низкий турпоток']['Receipts_bln']
+
+mw_stat, mw_p = mannwhitneyu(high_t, low_t, alternative='two-sided')
+print(f"U = {mw_stat:.4f}, p = {mw_p:.6f}")
+
+
+# Краскел-Уоллис
+print("Критерий Краскела-Уоллиса")
+region_samples = [group['Receipts_bln'].values for name, group in df_filtered.groupby('Subregion')]
+kw_stat, kw_p = kruskal(*region_samples)
+print(f"H = {kw_stat:.4f}, p = {kw_p:.6f}")
+print()
+
+alpha = 0.05
+
+# Кендалл
+print("Критерий Кендалла")
+kt_tau, kt_p = kendalltau(df['Tourists_mln'], df['Receipts_bln'])
+print(f"t = {kt_tau:.4f}, p = {kt_p:.6f}")
+print()
+
+# Медианный критерий
+print("Медианный критерий")
+med_stat, med_p, med_val, _ = median_test(high_t, low_t)
+print(f"Общая медиана: {med_val:.2f} млрд $")
+print(f"X2 = {med_stat:.4f}, p = {med_p:.6f}")
+
