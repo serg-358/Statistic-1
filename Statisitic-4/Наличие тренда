@@ -1,0 +1,73 @@
+import pandas as pd
+import numpy as np
+import scipy.stats as stats
+from google.colab import files
+import io
+
+# Загрузка файла
+uploaded = files.upload()
+
+filename = list(uploaded.keys())[0]
+df = pd.read_excel(io.BytesIO(uploaded[filename]))
+numeric_cols = df.select_dtypes(include='number').columns.tolist()
+col_name = numeric_cols[-1] 
+y = df[col_name].dropna().values
+n = len(y)
+
+# Метод сравнения средних
+n1 = n // 2
+n2 = n - n1
+y1, y2 = y[:n1], y[n1:]
+
+mean1, mean2 = np.mean(y1), np.mean(y2)
+var1, var2 = np.var(y1, ddof=1), np.var(y2, ddof=1)
+
+f_stat = max(var1, var2) / min(var1, var2)
+f_crit = stats.f.ppf(0.95, dfn=n1-1, dfd=n2-1)
+equal_var = f_stat < f_crit
+
+if equal_var:
+    s_pooled_sq = ((n1-1)*var1 + (n2-1)*var2) / (n1 + n2 - 2)
+    t_stat = (abs(mean1 - mean2) / s_pooled_sq) * np.sqrt((n1 * n2) / (n1 + n2))
+else:
+    t_stat = abs(mean1 - mean2) / (np.sqrt(var1/n1) + np.sqrt(var2/n2))
+
+t_crit = stats.t.ppf(0.95, n1 + n2 - 2)
+trend_mean = t_stat > t_crit
+
+print("Метод сравнения средних")
+print(f"Средние: {mean1:.2f} vs {mean2:.2f}")
+print(f"Дисперсии: {var1:.2f} vs {var2:.2f} (F={f_stat:.2f}, F_crit={f_crit:.2f})")
+print(f"t-статистика: {t_stat:.4f} (крит: {t_crit:.4f})")
+
+# Метод Фостера-Стюарта
+P = np.zeros(n)
+Q = np.zeros(n)
+min_val = y[0]
+max_val = y[0]
+
+# Подсчет P и Q
+for i in range(1, n):
+    if y[i] < min_val:
+        P[i] = 1
+        min_val = y[i]
+    if y[i] > max_val:
+        Q[i] = 1
+        max_val = y[i]
+
+numerator = np.sum(P - Q)
+denominator_sum = sum([1/i for i in range(2, n+1)])
+denominator = 2 * denominator_sum
+
+t_fs = numerator / denominator
+
+t_fs_crit = stats.t.ppf(0.95, n-1)
+trend_fs = abs(t_fs) > t_fs_crit
+
+print("Метод Фостера-Стюарта")
+print(f"Сумма P (минимумы): {np.sum(P)}")
+print(f"Сумма Q (максимумы): {np.sum(Q)}")
+print(f"Разность: {numerator}")
+print(f"Знаменатель: {denominator:.4f}")
+print(f"t-статистика: {t_fs:.4f}")
+print(f"t-критическое (df={n-1}): {t_fs_crit:.4f}")
