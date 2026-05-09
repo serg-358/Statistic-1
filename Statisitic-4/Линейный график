@@ -1,0 +1,37 @@
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+import pandas as pd
+from google.colab import files
+
+plt.rcParams['font.family'] = 'DejaVu Sans' 
+plt.rcParams['axes.unicode_minus'] = False
+
+uploaded = files.upload()
+
+#Чтение данных
+df_indo = pd.read_excel('сои41.xlsx')
+df_sing = pd.read_excel('сои42.xlsx')
+df_indo = df_indo[['year', 'value']].rename(columns={'value': 'Индонезия'})
+df_sing = df_sing[['year', 'value']].rename(columns={'value': 'Сингапур'})
+df_combined = pd.merge(df_indo, df_sing, on='year', how='outer').sort_values('year')
+df_combined['year'] = df_combined['year'].astype(int)
+
+#Построение графика
+plt.figure(figsize=(12, 6))
+plt.plot(df_combined['year'], df_combined['Индонезия'], 
+         marker='o', markersize=5, label='Индонезия', linewidth=2, color='#1f77b4')
+plt.plot(df_combined['year'], df_combined['Сингапур'], 
+         marker='s', markersize=5, label='Сингапур', linewidth=2, color='#ff7f0e')
+
+plt.title('Динамика прибытий посетителей в Индонезию и Сингапур (1995–2024 гг.)', 
+          fontsize=14, fontweight='bold', pad=15)
+plt.xlabel('Год', fontsize=12, labelpad=10)
+plt.ylabel('Количество прибытий, тыс. чел.', fontsize=12, labelpad=10)
+plt.legend(fontsize=11, loc='upper left')
+plt.grid(True, linestyle='--', alpha=0.5)
+plt.xticks(df_combined['year'], rotation=45)
+plt.gca().yaxis.set_major_formatter(ticker.StrMethodFormatter('{x:,.0f}'))
+plt.tight_layout()
+
+plt.show()
+
