@@ -1,0 +1,114 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from google.colab import files
+import io
+
+# Загрузка файла
+uploaded = files.upload()
+filename = list(uploaded.keys())[0]
+
+# Чтение данных
+df = pd.read_excel(io.BytesIO(uploaded[filename]))
+y = df['value'].dropna().values
+years = df['year'].dropna().values
+n = len(y)
+
+
+# Функции сглаживания
+# Сглаживание нечетным интервалом
+def moving_average_odd(y, p):
+    n = len(y)
+    y_smooth = np.full(n, np.nan)
+    window = 2*p + 1
+    
+    for t in range(p, n-p):
+        y_smooth[t] = np.mean(y[t-p:t+p+1])
+    
+    return y_smooth
+# Сглаживание четным интервалом с взвешенными крайними точками
+def moving_average_even(y, p):
+    n = len(y)
+    y_smooth = np.full(n, np.nan)
+    window = 2*p
+    
+    for t in range(p, n-p):
+        smoothed_value = (0.5*y[t-p] + np.sum(y[t-p+1:t+p]) + 0.5*y[t+p]) / window
+        y_smooth[t] = smoothed_value
+    
+    return y_smooth
+# Коэффициент детерминации
+def calculate_metrics(y_actual, y_smooth):
+
+    mask = ~np.isnan(y_smooth)
+    y_act = y_actual[mask]
+    y_sm = y_smooth[mask]
+    
+        
+    
+    ss_res = np.sum((y_act - y_sm)**2)
+    ss_tot = np.sum((y_act - np.mean(y_act))**2)
+    r2 = 1 - (ss_res / ss_tot)
+    
+    return {'R2': r2}
+
+
+
+# Метод 1: 3 точки (нечетный, p=1)
+smooth_3 = moving_average_odd(y, p=1)
+metrics_3 = calculate_metrics(y, smooth_3)
+
+# Метод 2: 5 точек (нечетный, p=2)
+smooth_5 = moving_average_odd(y, p=2)
+metrics_5 = calculate_metrics(y, smooth_5)
+
+# Метод 3: 4 точки (четный, p=2)
+smooth_4 = moving_average_even(y, p=2)
+metrics_4 = calculate_metrics(y, smooth_4)
+
+comparison_df = pd.DataFrame({
+    'Метод': ['3 точки (нечетный)', '5 точек (нечетный)', '4 точки (четный)'],
+    'R2': [metrics_3['R2'], metrics_5['R2'], metrics_4['R2']],
+    'Точек данных': [int(np.sum(~np.isnan(smooth_3))), 
+                     int(np.sum(~np.isnan(smooth_5))), 
+                     int(np.sum(~np.isnan(smooth_4)))]
+})
+
+print(comparison_df.to_string(index=False))
+
+
+
+
+plt.figure(figsize=(14, 10))
+
+# График 1: Сравнение всех методов сглаживания
+plt.subplot(2, 1, 1)
+plt.plot(years, y, 'k-', linewidth=2, label='Исходный ряд', alpha=0.7)
+plt.plot(years, smooth_3, 'b-', linewidth=2, label='3 точки (p=1)', alpha=0.8)
+plt.plot(years, smooth_5, 'r-', linewidth=2, label='5 точек (p=2)', alpha=0.8)
+plt.plot(years, smooth_4, 'g--', linewidth=2, label='4 точки (четный)', alpha=0.8)
+plt.xlabel('Год', fontsize=12)
+plt.ylabel('Тыс. человек', fontsize=12)
+plt.title('Сравнение методов сглаживания временного ряда', fontsize=14, fontweight='bold')
+plt.legend(loc='upper left')
+plt.grid(True, alpha=0.3)
+plt.xticks(years[::2], rotation=45)
+
+# График 2: Фрагмент для детального рассмотрения (последние 10 лет)
+plt.subplot(2, 1, 2)
+start_idx = -10
+plt.plot(years[start_idx:], y[start_idx:], 'ko-', linewidth=2, markersize=6, label='Исходный ряд', alpha=0.7)
+plt.plot(years[start_idx:], smooth_3[start_idx:], 'bs-', linewidth=2, markersize=5, label='3 точки', alpha=0.8)
+plt.plot(years[start_idx:], smooth_5[start_idx:], 'rs-', linewidth=2, markersize=5, label='5 точек', alpha=0.8)
+plt.plot(years[start_idx:], smooth_4[start_idx:], 'gs--', linewidth=2, markersize=5, label='4 точки', alpha=0.8)
+plt.xlabel('Год', fontsize=12)
+plt.ylabel('Тыс. человек', fontsize=12)
+plt.title('Детальное сравнение (2015-2024 гг.)', fontsize=14, fontweight='bold')
+plt.legend(loc='upper left')
+plt.grid(True, alpha=0.3)
+plt.xticks(years[start_idx:], rotation=45)
+
+plt.tight_layout()
+plt.savefig('smoothing_comparison.png', dpi=300, bbox_inches='tight')
+
+plt.show()
