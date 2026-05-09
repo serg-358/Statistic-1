@@ -1,0 +1,71 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Исходные данные
+years = list(range(1995, 2025))
+indonesia = [4324, 5034, 5185, 4606, 4728, 5064, 5153, 5033, 4467, 5321,
+             5002, 4871, 5506, 6234, 6324, 7003, 7650, 8044, 8802, 9435,
+             10407, 11519, 14040, 15810, 16107, 4052.8, 1557.5, 5889, 11677, 13902]
+singapore = [7137, 7292, 7198, 6242, 6958, 7691, 7522, 7567, 6127, 8329,
+             8943, 9751, 10285, 10116, 9683, 11642, 13171, 14496, 15568, 15095,
+             15231.5, 16403, 17425, 18508, 19116, 2743, 330, 6305, 13602, 16526]
+
+df = pd.DataFrame({
+    'Год': years,
+    'Индонезия': indonesia,
+    'Сингапур': singapore
+})
+
+# Расчёт статистики Ирвина
+def irwin_statistic_corrected(series):
+    sigma = series.std(ddof=1)
+    diff = series.diff().abs()
+    lambda_i = diff / sigma
+    return lambda_i, sigma
+
+lambda_ind, sigma_ind = irwin_statistic_corrected(df['Индонезия'])
+lambda_sing, sigma_sing = irwin_statistic_corrected(df['Сингапур'])
+
+df['λ_Инд'] = lambda_ind
+df['λ_Синг'] = lambda_sing
+
+# Критическое значение (n=30, α=0.05)
+lambda_crit = 1.50
+
+# Выявление аномалий
+df['Аномалия_Инд'] = df['λ_Инд'] > lambda_crit
+df['Аномалия_Синг'] = df['λ_Синг'] > lambda_crit
+
+print("Параметры рядов:")
+print(f"Индонезия: σ = {sigma_ind:.2f}")
+print(f"Сингапур:  σ = {sigma_sing:.2f}")
+print(f"Критическое значение λ_крит = {lambda_crit} (n=30, α=0.05)\n")
+
+print("Аномальные уровни (λ > 1.50):")
+anomalies = df[(df['Аномалия_Инд']) | (df['Аномалия_Синг'])]
+if len(anomalies) > 0:
+    print(anomalies[['Год', 'Индонезия', 'λ_Инд', 'Сингапур', 'λ_Синг']].to_string(index=False))
+else:
+    print("Аномальные уровни не выявлены.")
+
+# Построение графика
+plt.figure(figsize=(12, 6))
+plt.plot(df['Год'], df['λ_Инд'], marker='o', label='Индонезия', linewidth=2)
+plt.plot(df['Год'], df['λ_Синг'], marker='s', label='Сингапур', linewidth=2)
+plt.axhline(y=lambda_crit, color='red', linestyle='--', linewidth=1.5, label=f'λ_крит = {lambda_crit}')
+
+# Подсветка аномальных точек
+anom_ind = df[df['Аномалия_Инд']]
+anom_sing = df[df['Аномалия_Синг']]
+plt.scatter(anom_ind['Год'], anom_ind['λ_Инд'], color='red', s=100, zorder=5)
+plt.scatter(anom_sing['Год'], anom_sing['λ_Синг'], color='red', s=100, zorder=5)
+
+plt.title('Критерий Ирвина: выявление аномальных уровней', fontsize=14, pad=15)
+plt.xlabel('Год', fontsize=12)
+plt.ylabel('λ_i (статистика Ирвина)', fontsize=12)
+plt.xticks(range(1995, 2025, 2), rotation=45)
+plt.grid(True, alpha=0.3)
+plt.legend(fontsize=11)
+plt.tight_layout()
+plt.show()
