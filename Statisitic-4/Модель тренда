@@ -1,0 +1,156 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from google.colab import files
+import io
+
+# Загрузка файла
+uploaded = files.upload()
+filename = list(uploaded.keys())[0]
+
+# Чтение данных
+df = pd.read_excel(io.BytesIO(uploaded[filename]))
+y = df['value'].dropna().values
+years = df['year'].dropna().values
+country = df['reporter_area_label'].iloc[0]
+
+n = len(y)
+t = np.arange(n) 
+y_mean = np.mean(y)
+
+
+# Полином 1-го порядка
+def fit_poly1(t, y):
+    A = np.vstack([np.ones_like(t), t]).T
+    a0, a1 = np.linalg.lstsq(A, y, rcond=None)[0]
+    y_pred = a0 + a1 * t
+    return {
+        'name': 'Полином 1-го порядка',
+        'eq': f'y = {a0:.2f} + {a1:.4f}·t',
+        'pred': y_pred,
+        'params': (a0, a1),
+        'coeffs': {'a0': a0, 'a1': a1},
+        'type': 'poly1'  
+    }
+# Полином 2-го порядка
+def fit_poly2(t, y):
+    A = np.vstack([np.ones_like(t), t, t**2]).T
+    a0, a1, a2 = np.linalg.lstsq(A, y, rcond=None)[0]
+    y_pred = a0 + a1 * t + a2 * t**2
+    return {
+        'name': 'Полином 2-го порядка',
+        'eq': f'y = {a0:.2f} + {a1:.4f}·t + {a2:.6f}·t²',
+        'pred': y_pred,
+        'params': (a0, a1, a2),
+        'coeffs': {'a0': a0, 'a1': a1, 'a2': a2},
+        'type': 'poly2'  
+    }
+# Простая экспоненциальная модель
+def fit_exp(t, y):
+    y_log = np.log(np.maximum(y, 0.1)) 
+    A = np.vstack([np.ones_like(t), t]).T
+    ln_a, ln_b = np.linalg.lstsq(A, y_log, rcond=None)[0]
+    a, b = np.exp(ln_a), np.exp(ln_b)
+    y_pred = a * (b ** t)
+    return {
+        'name': 'Простая экспоненциальная',
+        'eq': f'y = {a:.2f} · {b:.6f}^t',
+        'pred': y_pred,
+        'params': (a, b),
+        'coeffs': {'a': a, 'b': b},
+        'type': 'exp' 
+    }
+
+# Подбор всех моделей
+models = {
+    'Полином 1-го порядка': fit_poly1(t, y),
+    'Полином 2-го порядка': fit_poly2(t, y),
+    'Простая экспоненциальная': fit_exp(t, y)
+}
+
+# Коэффициент детерминации
+var_fact = np.sum((y - y_mean)**2) / n 
+
+print("Сравнение моделей тренда")
+
+print(f"{'Модель':<35} {'R2':>10}")
+
+
+results = {}
+for name, model in models.items():
+    y_pred = model['pred']
+    
+    var_rasch = np.sum((y_pred - y_mean)**2) / n
+    
+    R2 = var_rasch / var_fact
+    
+    results[name] = {**model, 'R2': R2, 'var_rasch': var_rasch}
+    print(f"{name:<35} {R2:>10.4f}")
+
+# Выбор лучшей модели по R2
+best_name = max(results, key=lambda x: results[x]['R2'])
+best = results[best_name]
+
+
+# Коэффииценты полиномов
+
+print("Коэффииценты полиномов")
+
+
+for name, model in results.items():
+    print(f"\n{name}:")
+
+    coeffs = model['coeffs']
+    
+    if model['type'] == 'poly1':
+        print(f"Коэффициенты:")
+        print(f"a0 = {coeffs['a0']:.4f}")
+        print(f"a1 = {coeffs['a1']:.4f}")
+        
+    elif model['type'] == 'poly2':
+        print(f"Коэффициенты:")
+        print(f"a0 = {coeffs['a0']:.4f}")
+        print(f"a1 = {coeffs['a1']:.4f}")
+        print(f"a2 = {coeffs['a2']:.6f}")
+                  
+    else: 
+        print(f"Коэффициенты:")
+        print(f"a = {coeffs['a']:.4f}")
+        print(f"b = {coeffs['b']:.6f}")
+
+plt.figure(figsize=(14, 5))
+
+# График 1: Сравнение всех моделей
+plt.subplot(1, 2, 1)
+plt.plot(years, y, 'ko-', label='Исходный ряд', markersize=4, alpha=0.7, linewidth=1.5)
+colors = {'Полином 1-го порядка': 'blue', 'Полином 2-го порядка': 'red', 
+          'Простая экспоненциальная': 'green'}
+
+for name, model in results.items():
+    plt.plot(years, model['pred'], color=colors[name], linewidth=2, 
+             label=f"{name}\n(R²={model['R2']:.3f})", alpha=0.9)
+
+plt.xlabel('Год', fontsize=11)
+plt.ylabel('Тыс. человек', fontsize=11)
+plt.title('Сравнение моделей тренда', fontsize=13, fontweight='bold')
+plt.legend(loc='upper left', fontsize=9)
+plt.grid(True, alpha=0.3)
+plt.xticks(years[::3], rotation=45)
+
+# График 2: Лучшая модель
+plt.subplot(1, 2, 2)
+plt.plot(years, y, 'ko-', label='Исходный ряд', markersize=4, alpha=0.6, linewidth=1.5)
+plt.plot(years, best['pred'], 'r-', linewidth=2.5, 
+         label=f"{best_name}\n{best['eq']}\nR² = {best['R2']:.4f}")
+
+plt.xlabel('Год', fontsize=11)
+plt.ylabel('Тыс. человек', fontsize=11)
+plt.title('Выбранная модель тренда', fontsize=13, fontweight='bold')
+plt.legend(loc='upper left', fontsize=10)
+plt.grid(True, alpha=0.3)
+plt.xticks(years[::3], rotation=45)
+
+plt.tight_layout()
+plt.savefig(f'trend_{country.lower()}_p1_9.png', dpi=300, bbox_inches='tight')
+plt.show()
+
