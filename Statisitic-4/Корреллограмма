@@ -1,0 +1,59 @@
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+from google.colab import files
+
+plt.rcParams['font.family'] = 'DejaVu Sans'
+plt.rcParams['axes.unicode_minus'] = False
+uploaded = files.upload()
+
+#Чтение и подготовка данных
+filename = list(uploaded.keys())[0]
+df = pd.read_excel(filename)
+df = df[['year', 'value']].rename(columns={'value': 'y'})
+df['year'] = df['year'].astype(int)
+df = df.sort_values('year').reset_index(drop=True)
+
+y = df['y'].values
+n = len(y)
+y_mean = np.mean(y)
+
+#Расчёт серийных автокорреляций по упрощённой формуле
+def calc_autocorr_simplified(y, k):
+    n = len(y)
+    y_mean = np.mean(y)
+    numerator = np.sum((y[:n-k] - y_mean) * (y[k:] - y_mean))
+    denominator = np.sum((y - y_mean)**2)
+    return numerator / denominator if denominator != 0 else 0
+
+# Максимальный лаг
+# max_lag = max(int(n/4), int(np.sqrt(n)), 12)
+max_lag = 10
+autocorr_values = [calc_autocorr_simplified(y, k) for k in range(max_lag + 1)]
+
+# Доверительные границы
+center = -1 / n
+half_width = 2 / np.sqrt(n)
+upper_bound = center + half_width
+lower_bound = center - half_width
+
+#Построение коррелограммы
+plt.figure(figsize=(11, 5))
+lags = np.arange(max_lag + 1)
+plt.bar(lags, autocorr_values, color='#2E86AB', edgecolor='black', width=0.6, label='rₖ')
+plt.axhline(0, color='black', linewidth=0.7)
+plt.axhline(upper_bound, color='red', linestyle='--', linewidth=1.2,
+            label=f'Границы значимости ({lower_bound:.3f}; {upper_bound:.3f})')
+plt.axhline(lower_bound, color='red', linestyle='--', linewidth=1.2)
+
+plt.title('Коррелограмма временного ряда прибытий в Индонезию (1995–2024)',
+          fontsize=13, fontweight='bold', pad=15)
+plt.xlabel('Лаг (k)', fontsize=11, labelpad=8)
+plt.ylabel('Коэффициент автокорреляции (rₖ)', fontsize=11, labelpad=8)
+plt.xticks(lags)
+plt.legend(fontsize=10, loc='upper right', framealpha=0.9)
+plt.grid(True, axis='y', linestyle=':', alpha=0.4)
+plt.tight_layout()
+
+plt.show()
+
