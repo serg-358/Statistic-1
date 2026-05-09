@@ -1,0 +1,120 @@
+import numpy as np
+import pandas as pd
+import math
+from scipy import stats
+from google.colab import files
+
+
+uploaded = files.upload()
+    
+filename = list(uploaded.keys())[0]
+df = pd.read_excel(filename)
+
+
+y = df['value'].values.astype(float)
+n = len(y)
+t = np.arange(1, n + 1) 
+
+# Построение тренда (полином 2-го порядка)
+coeffs = np.polyfit(t, y, 2) 
+y_pred = np.polyval(coeffs, t)
+R = y - y_pred 
+
+
+# Критерий серий
+med = np.median(R)
+signs = ['+' if r > med else '-' for r in R]
+
+runs, curr = [], 1
+for i in range(1, n):
+    if signs[i] == signs[i-1]: 
+        curr += 1
+    else: 
+        runs.append(curr)
+        curr = 1
+runs.append(curr)
+
+N, K = len(runs), max(runs)
+K_crit = math.floor(3.3 * (math.log10(n) + 1))
+N_crit = 0.5 * (n + 1 - 1.96 * math.sqrt(n - 1))
+random_runs = (K < K_crit) and (N > N_crit)
+
+# Критерий Пикса
+p = 0
+for i in range(1, n-1):
+    if (R[i-1] < R[i] > R[i+1]) or (R[i-1] > R[i] < R[i+1]):
+        p += 1
+
+p_bar = (2/3) * (n - 2)
+sigma_p2 = (16*n - 29) / 90 
+p_crit = p_bar - 1.96 * sigma_p2
+random_peaks = p > p_crit
+
+print("Проверка случайности колебаний:")
+print(f"Критерий серий: N={N}, K={K} | Крит. границы: N>{N_crit:.2f}, K<{K_crit}")
+print(f"{'Гипотеза принимается (случайны)' if random_runs else 'Гипотеза отвергается'}")
+print(f"Критерий поворотных точек: p={p} | Крит. граница: p>{p_crit:.2f}")
+print(f"{'Гипотеза принимается' if random_peaks else 'Гипотеза отвергается'}\n")
+
+# Нормальность распределения
+mean_R2 = np.mean(R**2)
+A = (mean_R2)**(-1.5) * np.mean(R**3)
+E = (mean_R2)**(-2) * np.mean(R**4)
+
+sigma_A = math.sqrt(6*(n-2)/((n+1)*(n+3)))
+sigma_E = math.sqrt(24*n*(n-2)*(n-3)/((n+1)**2*(n+3)*(n+5)))
+
+E_corrected = E + 6/(n+1)
+
+# Границы для принятия и отвержения
+A_accept = 1.5 * sigma_A
+E_accept = 1.5 * sigma_E
+A_reject = 2.0 * sigma_A
+E_reject = 2.0 * sigma_E
+
+# Проверка зон
+A_in_accept = abs(A) < A_accept
+E_in_accept = abs(E_corrected) < E_accept
+A_in_reject = abs(A) >= A_reject
+E_in_reject = abs(E_corrected) >= E_reject
+
+# Решение
+if A_in_accept and E_in_accept:
+    normal_status = "Гипотеза ПРИНИМАЕТСЯ"
+    normal_code = "accept"
+elif A_in_reject or E_in_reject:
+    normal_status = "Гипотеза ОТВЕРГАЕТСЯ"
+    normal_code = "reject"
+
+print("Проверка нормальности распределения:")
+print(f"Асимметрия: |E|={abs(A):.4f} | Границы: 1.5a={A_accept:.4f}, 2a={A_reject:.4f}")
+print(f"Эксцесс: |E+{6/(n+1):.4f}|={abs(E_corrected):.4f} | Границы: 1.5a={E_accept:.4f}, 2a={E_reject:.4f}")
+print(f"{normal_status}\n")
+
+# Равенство матожидания нулю
+R_mean = np.mean(R)
+S_R = math.sqrt(np.mean(R**2))
+t_calc = R_mean / (S_R * math.sqrt(n))
+t_crit = stats.t.ppf(0.975, n-1)
+zero_mean = abs(t_calc) < t_crit
+
+print("Проверка равенства математического ожидания нулю:")
+print(f"t_расч = {t_calc:.4f} | t_крит(0.05, {n-1}) = {t_crit:.4f}")
+print(f"{'Гипотеза принимается (M(R)=0)' if zero_mean else 'Гипотеза отвергается'}\n")
+
+# Критерий Дарбина-Уотсона
+d = np.sum(np.diff(R)**2) / np.sum(R**2)
+d_prime = d if d < 2 else 4 - d
+d1, d2 = 1.284, 1.567  
+
+if d_prime > d2: indep = True
+elif d_prime < d1: indep = False
+else: indep = None
+
+print("Проверка независимости остатков (Дарбина-Уотсона):")
+print(f"d = {d:.4f} - d' = {d_prime:.4f}")
+print(f"Критические: d1={d1}, d2={d2}")
+if indep is True:
+    print("Гипотеза о независимости принимается\n")
+elif indep is False:
+    print("Гипотеза о независимости отвергается")
