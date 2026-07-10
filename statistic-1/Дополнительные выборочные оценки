@@ -1,0 +1,59 @@
+import pandas as pd
+import numpy as np
+from google.colab import files
+
+# Загрузка данных
+uploaded = files.upload()
+filename = list(uploaded.keys())[0]
+
+df = pd.read_excel(filename)
+data = df.iloc[:, 1].values
+data = data[~np.isnan(data)]
+n = len(data)
+
+# Сортировка данных для порядковых статистик
+data_sorted = np.sort(data)
+
+# Расчёт выборочной медианы
+if n % 2 == 1:  # нечетное
+    median = data_sorted[(n + 1) // 2 - 1]
+else:  # четное
+    median = (data_sorted[n // 2 - 1] + data_sorted[n // 2]) / 2
+
+print(f"Выборочная медиана: med = {median:.2f} млн. чел.")
+
+# Расчёт выборочных квартилей
+# Первый квартиль
+Z14 = np.percentile(data, 25)
+
+# Третий квартиль
+Z34 = np.percentile(data, 75)
+
+print(f"Выборочные квартили:")
+print(f"Z1/4 (25-й процентиль) = {Z14:.2f} млн. чел.")
+print(f"Z3/4 (75-й процентиль) = {Z34:.2f} млн. чел.")
+
+# Рассёт среднего абсолютного отклонения
+mad = np.mean(np.abs(data - median))
+
+print(f"Среднее абсолютное отклонение: d = {mad:.2f} млн. чел.")
+
+# Расчёт полусуммы квартилей
+t_q = 0.5 * (Z14 + Z34)
+
+print(f"Полусумма квартилей: tq = {t_q:.2f} млн. чел.")
+
+# Расчёт полусуммы экстремальных элементов
+t_r = 0.5 * (max(data) + min(data))
+
+print(f"Поолусумма экстремальных элементов: tr = {t_r:.2f} млн. чел.")
+
+# Расчёт разности выборочных квартилей
+q = Z34 - Z14
+
+print(f"Разность выборочных квартилей: q = {q:.2f} млн. чел.")
+
+# Расчёт размаха выборки
+r = max(data) - min(data)
+
+print(f"Размах выборки: R = {r:.2f} млн. чел.")
